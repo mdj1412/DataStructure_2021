@@ -1,0 +1,203 @@
+//  Created by 민동준 on 2021/11/04.
+//
+//  FILE: dnode.cpp
+//  IMPLEMENTS: The functions of the node class and the doubly linked list toolkit.
+//  INVARIANT for the node class:
+//  The data of a node is stored in data_field, link_fore and link_back.
+
+#include "dnode.hpp"
+
+namespace main_mindongjun_2018603039
+{
+    template <class Item>
+    std::size_t list_length(const node<Item>* head_ptr)
+    // Library facilities used: cstdlib
+    {
+        const node<Item>* cursor;
+        size_t answer;
+        
+        answer = 0;
+        for (cursor=head_ptr;cursor!=NULL;cursor=cursor->fore())
+            answer++;
+        return answer;
+    }
+
+    template <class Item>
+    node<Item>* list_search(node<Item>* head_ptr, const Item& target)
+    // Library facilities used: cstdlib
+    {
+        node<Item>* cursor;
+        
+        for (cursor=head_ptr;cursor!=NULL;cursor=cursor->fore())
+            if (cursor->data() == target)
+                break;
+        return cursor;
+    }
+
+    template <class Item>
+    const node<Item>* list_search(const node<Item>* head_ptr, const Item& target)
+    // Library facilities used: cstdlib
+    {
+        const node<Item>* cursor;
+        
+        for (cursor=head_ptr;cursor!=NULL;cursor=cursor->fore())
+            if (cursor->data() == target)
+                break;
+        return cursor;
+    }
+
+    template <class Item>
+    node<Item>* list_head_locate(node<Item>* head_ptr, std::size_t position)
+    // Library facilities used: cassert, cstdlib
+    {
+        node<Item>* cursor;
+        size_t i;
+        
+        assert(position > 0);
+        cursor = head_ptr;
+        for (i=1;(i<position)&&(cursor!=NULL);i++)
+            cursor=cursor->fore();
+        return cursor;
+    }
+
+    template <class Item>
+    const node<Item>* list_head_locate(const node<Item>* head_ptr, std::size_t position)
+    // Library facilities used: cassert, cstdlib
+    {
+        const node<Item>* cursor;
+        size_t i;
+        
+        assert(position > 0);
+        cursor = head_ptr;
+        for (i=1;(i<position)&&(cursor!=NULL);i++)
+            cursor=cursor->fore();
+        return cursor;
+    }
+
+    template <class Item>
+    node<Item>* list_tail_locate(node<Item>* tail_ptr, std::size_t position)
+    // Library facilities used: cassert, cstdlib
+    {
+        node<Item>* cursor;
+        size_t i;
+        
+        assert(position > 0);
+        cursor = tail_ptr;
+        for (i=1;(i<position)&&(cursor!=NULL);i++)
+            cursor=cursor->back();
+        return cursor;
+    }
+
+    template <class Item>
+    const node<Item>* list_tail_locate(const node<Item>* tail_ptr, std::size_t position)
+    // Library facilities used: cassert, cstdlib
+    {
+        const node<Item>* cursor;
+        size_t i;
+        
+        assert(position > 0);
+        cursor = tail_ptr;
+        for (i=1;(i<position)&&(cursor!=NULL);i++)
+            cursor=cursor->back();
+        return cursor;
+    }
+
+    template <class Item>
+    void list_insert(node<Item>* previous_ptr, const Item& entry)
+    {
+        node<Item>* insert_ptr;
+        
+        insert_ptr = new node<Item>(entry, previous_ptr->fore(), previous_ptr);
+        insert_ptr->fore()->set_back(insert_ptr);
+        previous_ptr->set_fore(insert_ptr);
+    }
+
+    template <class Item>
+    void list_head_insert(node<Item>*& head_ptr, const Item& entry)
+    // Library facilities used: cstdlib
+    {
+        head_ptr = new node<Item>(entry, head_ptr);
+        head_ptr->fore()->set_back(head_ptr);
+    }
+
+    template <class Item>
+    void list_tail_insert(node<Item>*& tail_ptr, const Item& entry)
+    // Library facilities used: cstdlib
+    {
+        tail_ptr = new node<Item>(entry, NULL, tail_ptr);
+        tail_ptr->back()->set_fore(tail_ptr);
+    }
+
+    template <class Item>
+    void list_head_remove(node<Item>*& head_ptr)
+    // Library facilities used: cstdlib
+    {
+        node<Item>* remove_ptr;
+        
+        remove_ptr = head_ptr;
+        head_ptr = head_ptr->fore();
+        head_ptr->set_back(NULL);
+        delete remove_ptr;
+    }
+    
+    template <class Item>
+    void list_tail_remove(node<Item>*& tail_ptr)
+    // Library facilities used: cstdlib
+    {
+        node<Item>* remove_ptr;
+        
+        remove_ptr = tail_ptr;
+        tail_ptr = tail_ptr->back();
+        tail_ptr->set_fore(NULL);
+        delete remove_ptr;
+    }
+
+    template <class Item>
+    void list_remove(node<Item>* previous_ptr)
+    {
+        node<Item>* remove_ptr;
+        
+        remove_ptr = previous_ptr->fore();
+        remove_ptr->fore()->set_back(previous_ptr);
+        previous_ptr->set_fore(remove_ptr->fore());
+        delete remove_ptr;
+    }
+
+    template <class Item>
+    void list_clear(node<Item>*& head_ptr)
+    // Library facilities used: cstdlib
+    {
+        while (head_ptr != NULL)
+            list_head_remove(head_ptr);
+    }
+
+    template <class Item>
+    void list_copy(const node<Item>* source_ptr, node<Item>*& head_ptr, node<Item>*& tail_ptr)
+    // Library facilities used: cstdlib
+    {
+        head_ptr = NULL;
+        tail_ptr = NULL;
+        
+        if (source_ptr == NULL)
+            return;
+        list_head_insert(head_ptr, source_ptr->data());
+        tail_ptr = head_ptr;
+        
+        source_ptr = source_ptr->fore();
+        while (source_ptr != NULL)
+        {
+            list_tail_insert(tail_ptr, source_ptr->data());
+            source_ptr = source_ptr->fore();
+        }
+    }
+    
+//    template void list_clear<char>(node<char>*& head_ptr);
+//    template std::size_t list_length<char>(const node<char>* head_ptr);
+//    template void list_head_insert<char>(node<char>*& head_ptr, const char& entry);
+//    template void list_copy<char>(const node<char>* source_ptr, node<char>*& head_ptr, node<char>*& tail_ptr);
+//
+//    template void list_clear<double>(node<double>*& head_ptr);
+//    template std::size_t list_length<double>(const node<double>* head_ptr);
+//    template void list_head_insert<double>(node<double>*& head_ptr, const double& entry);
+//    template void list_copy<double>(const node<double>* source_ptr, node<double>*& head_ptr, node<double>*& tail_ptr);
+}

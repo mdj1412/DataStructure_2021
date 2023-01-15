@@ -1,0 +1,619 @@
+//  Created by 민동준 on 2021/11/17.
+//
+//  FILE: set.template
+//  INVARIANT for the template set class:
+//      - There are several rules in implementing b-trees.
+//          - There is a positive integer called MININUM which determines how many entries
+//          are stored in a single node.
+//          1) The root may have as few as one entry(even no entries if no children)
+//             Every other node has at least MININUM entries.
+//          2) The maximum number of entries in a node is twice the value of MININUM.
+//          3) The entries of each B-tree node are stored in a partially filled array,
+//             sorted from the smallest entry (at index 0) to the largest entry (at the final used index)
+//          4) The number of subtrees below a nonleaf node is always one more than the number of
+//             entries in the node.
+//          5) For any nonleaf node:
+//              (a) An entry at index i is greater than all the entries in subtree number i of the node.
+//              (b) An entry at index i is smaller than all the entries in subtree number i+1 of the node.
+//          6) Every leaf in a B-tree has the same depth.
+//
+
+#include "set.hpp"
+#include <iostream>
+#include <iomanip>
+#include <algorithm>
+#include <cassert>
+using namespace std;
+
+namespace main_mindongjun_2018603039
+{
+    template <class Item>
+    const std::size_t set<Item>::MINIMUM;
+
+    template <class Item>
+    const std::size_t set<Item>::MAXIMUM;
+
+    template <class Item>
+    set<Item>::set() { data_count = 0; child_count = 0; }
+
+    template <class Item>
+    void set<Item>::clear()
+    // XXX 정확하지 않음 , 재귀 반복
+    {
+        if (this == NULL) { return; }
+        for (int i=0;i<child_count;i++) { subset[i]->clear(); }
+    }
+
+// =======================================================================================================
+
+    template <class Item>
+    std::size_t set<Item>::count(const Item &target) const
+    {
+        size_t i;
+        
+        i = 0;
+        while ((i < data_count) && (data[i] < target)) { i++; }
+        // 이유!!!
+        // But the Item data type is not required to have an == operator.
+        if ((i < data_count) && !(target < data[i])) { return 1; }  // target == data[i]
+        else if (is_leaf()) { return 0; }
+        else { return subset[i]->count(target); }
+    }
+
+// =======================================================================================================
+
+    template <class Item>
+    void set<Item>::show_contents(int indent) const
+    {
+        print_help(indent);
+        std::cout << std::endl;
+        cout << "------------------------------------------------------------------------"  << endl;
+        std::cout << std::endl;
+    }
+
+
+    template <class Item>
+    void set<Item>::print_help(int indent) const
+    // Library facilities used: iostream (provides cout), and iomanip (provides setw)
+    {
+        const int EXTRA_INDENTATION = 4;
+        size_t i;
+        
+        if (data_count == 0) { return; }
+        
+        if (is_leaf())
+        {
+            i = data_count - 1;
+            while (true) {
+                std::cout << std::setw(indent) << ""; // Print the indentation.
+                std::cout << data[i] << std::endl;
+                
+                // XXX size_t는 양수만 생각
+                if (i-- == 0) { return; }
+            }
+        }
+        
+        i = child_count - 1;
+        while (true) {
+            subset[i]->print_help(indent+EXTRA_INDENTATION);
+            if (i-- == 0) { return; }
+            std::cout << std::setw(indent) << "";
+            std::cout << data[i] << std::endl;
+        }
+    }
+
+// =======================================================================================================
+
+    template <class Item>
+    bool set<Item>::loose_insert(const Item& entry)
+    {
+        size_t i, j;
+        bool b;
+        
+        i = 0;
+        while ((i < data_count) && (data[i] < entry)) { i++; }
+        
+        // entry == data[i] 일 때, return false로 끝내기
+        // 이유) 중복 허용 X
+        if ((i < data_count) && !(entry < data[i])) { return false; }
+        
+        // 재귀에서 n = 1일 때
+        else if (is_leaf())
+        {
+            j = data_count;
+            while (j > i)
+            {// data[i]에 entry를 대입하기 위해 한 칸씩 이동
+                data[j] = data[j-1];
+                j--;
+            }
+            data[i] = entry;
+            data_count++;
+            return true;
+        }
+        
+        // 재귀에서 n>=2 일 때, => 재귀 반복
+        else
+        {
+            b = subset[i]->loose_insert(entry);
+            // XXX 다시 확인
+            if (b && (subset[i]->data_count > MAXIMUM))
+            {
+                fix_excess(i);
+            }
+            return b;
+        }
+    }
+
+
+    template <class Item>
+    void set<Item>::fix_excess(std::size_t i)
+    {
+        size_t idx;
+        set<Item> *left_set, *right_set;
+        
+        // data[i]에 subset[i]->data[MINIMUM] (중간값)을 대입하기 위해 한 칸씩 이동
+        idx = data_count;
+        while (idx > i)
+        {
+            data[idx] = data[idx - 1];
+            idx--;
+        }
+        data[i] = subset[i]->data[MINIMUM];
+        data_count++;
+        
+        // 해당 subset을 둘로 나눌 때, 필요한 set 생성
+        left_set = new set<Item>();
+        right_set = new set<Item>();
+        
+        // subset의 data를 둘로 나누는 과정
+        for (int j=0;j<MINIMUM;j++)
+        {
+            left_set->data[j] = subset[i]->data[j];
+            right_set->data[j] = subset[i]->data[j+1+MINIMUM];
+        }
+        // subset의 data_count 조정
+        left_set->data_count = MINIMUM;
+        right_set->data_count = MINIMUM;
+        
+        if (!subset[i]->is_leaf())
+        {
+            // subset의 set을 둘로 나누는 과정
+            for (int j=0;j<MINIMUM+1;j++)
+            {
+                left_set->subset[j] = subset[i]->subset[j];
+                right_set->subset[j] = subset[i]->subset[j+1+MINIMUM];
+            }
+            // subset의 child_count 조정
+            left_set->child_count = MINIMUM + 1;
+            right_set->child_count = MINIMUM + 1;
+        }
+        
+        // 현재 set의 child를 한 칸씩 이동시켜 right_set과 left_set을 추가하는 과정
+        idx = child_count;
+        while (idx > i + 1)
+        {
+            subset[idx] = subset[idx - 1];
+            idx--;
+        }
+        subset[idx--] = right_set;
+        subset[idx] = left_set;
+        child_count++;
+    }
+
+
+    template <class Item>
+    bool set<Item>::insert(const Item &entry)
+    {
+        set<Item>* new_root;
+        
+        if (!loose_insert(entry)) { return false; }
+        
+        // 마지막으로 root의 entry가 MAXIMUM보다 많을 때
+        if (data_count > MAXIMUM)
+        {
+            // 기존에 root에 있던 entry와 child를
+            // 밑에 있는 new_root에 복사하고
+            // 기존의 root의 entry를 전체 초기화
+            // child는 new_root 하나만 저장한다.
+            new_root = new set<Item>();
+            
+            // 기존의 root의 entry를
+            // new_root의 entry에 복사하고 초기화 시킨다.
+            for (int i=0;i<MAXIMUM+1;i++)
+            {
+                new_root->data[i] = data[i];
+                data[i] = Item(0);
+            }
+            new_root->data_count = MAXIMUM + 1;
+            // child를 가지고 있다면 !!!
+            // 기존의 root의 entry를
+            // new_root의 entry에 복사하고 초기화 시킨다.
+            if (!is_leaf())
+            {
+                for (int i=0;i<MAXIMUM+2;i++)
+                {
+                    new_root->subset[i] = subset[i];
+                    subset[i] = NULL;
+                }
+                new_root->child_count = MAXIMUM + 2;
+            }
+            
+            subset[0] = new_root;
+            data_count = 0; child_count = 1;
+            fix_excess(0);
+        }
+        return true;
+    }
+
+// =======================================================================================================
+
+    template <class Item>
+    bool set<Item>::erase(const Item& target)
+    {
+        set<Item>* old_root;    // delete 해야할 대상
+        
+        // target이 존재하는지 확인해보고 없으면 return false
+        if (!loose_erase(target)) { return false; }
+        
+        // root의 entry가 없고 child가 한 개일 때,
+        // 둘 다 확인하는 이유) B-tree 전체에 entry가 전혀 없을 수도 있어서
+        if ((data_count == 0) && (child_count == 1))
+        {
+            old_root = subset[0];   // delete 해야할 대상
+            
+            // 기존의 root에 subset[0]의 entry 복사
+            for (int i=0;i<old_root->data_count;i++)
+            {
+                data[data_count] = old_root->data[i];
+                data_count++;
+            }
+            
+            // subset[0]의 child가 없다면 !!!
+            if (old_root->is_leaf())
+            {
+                child_count = 0;
+                subset[0] = NULL;
+            }
+            // subset[0]의 child가 있다면 !!!
+            // 기존의 root에 subset[0]의 child 복사
+            // 이후 NULL로 꼭 바꿔줘야한다 !!!
+            else
+            {
+                child_count = 0;
+                for (int i=0;i<old_root->child_count;i++)
+                {
+                    subset[child_count] = old_root->subset[i];
+                    child_count++;
+                    old_root->subset[i] = NULL;    // delete 때문에 !!!
+                }
+            }
+            delete old_root;
+        }
+        return true;
+    }
+
+
+
+    template <class Item>
+    bool set<Item>::loose_erase(const Item& target)
+    {
+        size_t i, j;
+        bool b;
+        
+        i = 0;
+        while ((i < data_count) && (data[i] < target)) { i++; }
+        
+        // child가 없을 때, <=> n=1
+        if (is_leaf())
+        {
+            // target 값이 없는 경우
+            if ((i == data_count) || (target < data[i]))
+            {
+                return false;
+            }
+            
+            // target 값을 찾은 경우
+            if ((i < data_count) && !(target < data[i]))
+            {
+                data[i] = Item(0);
+                j = i;
+                while (j < data_count)
+                {
+                    data[j] = data[j+1];
+                    j++;
+                }
+                data[data_count--] = Item(0);
+                return true;
+            }
+            
+            // 혹시 모를 방지를 위해
+            std::cout << "여기 나오면 문제 있음" << std::endl;
+            return true;
+        }
+        
+        // child가 있을 때, <=> n>=2
+        else
+        {
+            // target != data[i]
+            // <=> data[i-1] < target < data[i]
+            if ((i == data_count) || (target < data[i]))
+            {
+                b = subset[i]->loose_erase(target);
+                if (!b) { return false; }
+                else
+                {
+                    if (subset[i]->data_count < MINIMUM)
+                    {// subset[i]->data_count == MINIMUM - 1
+                        fix_shortage(i);
+                    }
+                    return true;
+                }
+            }
+            
+            // target == data[i]
+            else
+            {
+                // subset[i] 전체에서 가장 큰 값을
+                // data[i]와 교체
+                subset[i]->remove_biggest(data[i]);
+                if (subset[i]->data_count < MINIMUM)
+                {// subset[i]->data_count == MINIMUM - 1
+                    fix_shortage(i);
+                }
+                return true;
+            }
+        }
+    }
+
+
+    template <class Item>
+    void set<Item>::fix_shortage(std::size_t i)
+    {
+        size_t k, idx;
+        
+        
+        
+        // Case 1
+        // transfer an extra entry from subset[i-1]
+        if ((i != 0) && (subset[i-1]->data_count > MINIMUM))
+        {
+            assert(subset[i]->data_count == MINIMUM - 1);
+            
+            
+            // 1 단계) transfer data[i-1] to the front of subset[i]->data[0]
+            // subset[i]의 entry들을 한 칸 씩 뒤로 밀기
+            k = subset[i]->data_count; // == MINIMUM - 1
+            while (k != 0) {
+                subset[i]->data[k] = subset[i]->data[k-1];
+                k--;
+            }
+            // subset[i]->data[0]에 data[i-1] 대입한 뒤
+            // subset[i]->data_count를 MINIMUM으로 맞춰준다.
+            // (즉, subset[i]->data_count가 한 개 늘어났다.)
+            subset[i]->data[0] = data[i-1];
+            subset[i]->data_count++; // == MINIMUM
+            
+            // 2 단계) Transfer the final item of subset[i-1]->data up to replace data[i-1]
+            // and reduce subset[i-1]->data_count by 1
+            // data[i-1]->subset[i-1]의 entry 중에 가장 큰 값을 대입하면서 제거하고
+            // subset[i-1]->data_count를 한 개 줄인다.
+            idx = subset[i-1]->data_count - 1;
+            data[i-1] = subset[i-1]->data[idx];
+            subset[i-1]->data[idx] = Item(0);
+            subset[i-1]->data_count--;
+            
+            // 3 단계) If subset[i-1] has children, transfer the final child of subset[i-1]
+            // over to the front of the subset[i]
+            // child가 없다면,
+            if (!(subset[i-1]->is_leaf()))
+            {
+                // subset[i]의 child들을 한 칸 씩 뒤로 밀기
+                k = subset[i]->child_count; // == MINIMUM
+                assert(k == MINIMUM);
+                while (k != 0) {
+                    subset[i]->subset[k] = subset[i]->subset[k-1];
+                    k--;
+                }
+                // subset[i]->subset[0]에 subset[i-1]->subset[max]를 대입한 후
+                // NULL로 바꿔주고 (max = subset[i-1]->child_count - 1;)
+                // subset[i-1]->child_count 값을 한 개 줄여준다.
+                // 그리고 subset[i]->child_count를 한 개 늘려준다.
+                idx = subset[i-1]->child_count - 1;
+                subset[i]->subset[0] = subset[i-1]->subset[idx];
+                subset[i-1]->subset[idx] = NULL;
+                subset[i-1]->child_count--;
+                subset[i]->child_count++; // == MINIMUM + 1
+                assert(subset[i]->child_count == MINIMUM + 1);
+            }
+        }
+        
+        
+        
+        // Case 2
+        // transfer an extra entry from subset[i-1]
+        else if ((i < child_count-1) && (subset[i+1]->data_count > MINIMUM))
+        {
+            assert(subset[i]->data_count == MINIMUM - 1);
+            
+            
+            // 1 단계) transfer data[i] to the end of subset[i]->data
+            // data[i]을 subset[i]의 마지막 data에 옮기기
+            idx = subset[i]->data_count;
+            subset[i]->data[idx] = data[i];
+            // 그러면 subset[i]의 data_count 값은 MINIMUM이 된다
+            subset[i]->data_count++; // == MINIMUM
+            
+            // 2 단계) transfer the first item of subset[i+1]->data up th replace data[i]
+            // and reduce subset[i+1]->data_count by 1
+            // 먼저 subset[i+1]에서 가장 작은 값을 data[i]에 옮긴다
+            data[i] = subset[i+1]->data[0];
+            // subset[i+1]의 data들을 한 칸씩 앞으로 옮긴 후 subset[i+1]의 data_count를 1 줄인다.
+            for (k=1;k<subset[i+1]->data_count;k++)
+            {
+                subset[i+1]->data[k-1] = subset[i+1]->data[k];
+            }
+            subset[i+1]->data_count--;
+            idx = subset[i+1]->data_count;
+            subset[i+1]->data[idx] = Item(0);
+            
+            // 3 단계) If subset[i] has children, transfer the first child of subset[i+1]
+            // over to the end of the subset[i]
+            if (!(subset[i]->is_leaf()))
+            {
+                // subset[i+1]의 subset[0]을 subset[i]의 subset[subset[i]->child_count]에 넣는다.
+                // 그리고 subset[i]->child_count를 1 늘려준다.
+                idx = subset[i]->child_count; // == MINIMUM
+                assert(idx == MINIMUM);
+                subset[i]->subset[idx] = subset[i+1]->subset[0];
+                subset[i]->child_count++; // == MINIMUM + 1
+                assert(subset[i]->child_count == MINIMUM + 1);
+                // subset[i+1]의 subset들을 한 칸씩 앞으로 이동시킨 후 subset[i+1]의 child_count를 1 줄인다.
+                for (k=1;k<subset[i+1]->child_count;k++)
+                {
+                    subset[i+1]->subset[k-1] = subset[i+1]->subset[k];
+                }
+                subset[i+1]->child_count--;
+                idx = subset[i+1]->child_count;
+                subset[i+1]->subset[idx] = NULL;
+            }
+        }
+        
+        
+        
+        // Case 3
+        // combine subset[i] with subset[i-1]
+        else if (i != 0)
+        {
+            // Case 1에 의해서 다음이 성립
+            assert(subset[i-1]->data_count == MINIMUM);
+            assert(subset[i]->data_count == MINIMUM - 1);
+            
+            
+            // 1 단계) move data[i-1] to the end of subset[i-1]->data
+            // data[i-1]을 subset[i-1]의 가장 오른쪽으로 이동
+            idx = subset[i-1]->data_count;
+            subset[i-1]->data[idx] = data[i-1];
+            idx++;
+            // 배열 data를 한 칸씩 앞으로 이동 후 data_count 값을 1 감소
+            for(k=i-1;k<data_count-1;k++) {
+                data[k] = data[k+1];
+            }
+            data_count--;
+            data[data_count] = Item(0);
+            
+            // 2 단계) transfer all the items and children of subset[i] to the end of subset[i-1]
+            // subset[i]의 data들을 subset[i-1] 뒤로 옮기고 subet[i-1]의 data_count를 바꾸자
+            for(k=0;k<MINIMUM-1;k++)
+            {
+                subset[i-1]->data[idx] = subset[i]->data[k];
+                idx++;
+            }
+            assert(idx == MAXIMUM);
+            subset[i-1]->data_count = MAXIMUM;
+            // subset[i]의 subset이 있는지 확인하고 옮기자.
+            if (!(subset[i]->is_leaf()))
+            {
+                assert(subset[i-1]->child_count == MINIMUM+1);
+                assert(subset[i]->child_count == MINIMUM);
+                
+                for(k=0;k<MINIMUM;k++)
+                {
+                    subset[i-1]->subset[MINIMUM+1+k] = subset[i]->subset[k];
+                }
+                subset[i-1]->child_count = MAXIMUM + 1;
+            }
+            
+            // 3 단계) delete the node subset[i] and shift subset[i+1], subset[i+2],
+            // and so on leftward and reduce child_count by 1.
+            // 배열 subset을 한 칸씩 앞으로 이동 후 child_count 값을 1 감소
+            for(k=i;k<child_count-1;k++) {
+                subset[k] = subset[k+1];
+            }
+            child_count--;
+            subset[child_count] = NULL;
+        }
+            
+            
+            
+        // Case 4
+        // combine subset[i] with subset[i+1]
+        else
+        {
+            // Case 2에 의해서 다음이 성립
+            assert(i < child_count-1);
+            assert(subset[i+1]->data_count == MINIMUM);
+            assert(subset[i]->data_count == MINIMUM - 1);
+            
+            
+            // 1 단계) move data[i] to the end of subset[i]->data
+            // data[i]을 subset[i+1]의 가장 오른쪽으로 이동
+            idx = subset[i]->data_count;
+            subset[i]->data[idx] = data[i];
+            idx++;
+            // 배열 data를 한 칸씩 앞으로 이동 후 data_count 값을 1 감소
+            for(k=i;k<data_count-1;k++) {
+                data[k] = data[k+1];
+            }
+            data_count--;
+            data[data_count] = Item(0);
+            
+            // 2 단계) transfer all the items and children of subset[i+1] to the end of subset[i]
+            // subset[i+1]의 data들을 subset[i] 뒤로 옮기고 subet[i]의 data_count를 바꾸자
+            for(k=0;k<MINIMUM;k++)
+            {
+                subset[i]->data[idx] = subset[i+1]->data[k];
+                idx++;
+            }
+            assert(idx == MAXIMUM);
+            subset[i]->data_count = MAXIMUM;
+            // subset[i+1]의 subset이 있는지 확인하고 옮기자.
+            if (!(subset[i+1]->is_leaf()))
+            {
+                assert(subset[i+1]->child_count == MINIMUM+1);
+                assert(subset[i]->child_count == MINIMUM);
+                
+                for(k=0;k<MINIMUM+1;k++)
+                {
+                    subset[i]->subset[MINIMUM+k] = subset[i+1]->subset[k];
+                }
+                subset[i]->child_count = MAXIMUM + 1;
+            }
+            
+            // 3 단계) delete the node subset[i+1] and shift subset[i+2], subset[i+3],
+            // and so on leftward and reduce child_count by 1.
+            // 배열 subset을 한 칸씩 앞으로 이동 후 child_count 값을 1 감소
+            for(k=i+1;k<child_count-1;k++) {
+                subset[k] = subset[k+1];
+            }
+            child_count--;
+            subset[child_count] = NULL;
+        }
+    }
+
+
+
+
+    template <class Item>
+    void set<Item>::remove_biggest(Item& removed_entry)
+    {
+        if (is_leaf())
+        {
+            data_count--;
+            removed_entry = data[data_count];
+            data[data_count] = Item(0);
+        }
+        
+        else
+        {
+            subset[child_count-1]->remove_biggest(removed_entry);
+            if (subset[child_count-1]->data_count < MINIMUM)
+            {
+                assert(subset[child_count-1]->data_count == MINIMUM-1);
+                
+                fix_shortage(child_count-1);
+            }
+        }
+    }
+
+//    template class set<int>;
+}
